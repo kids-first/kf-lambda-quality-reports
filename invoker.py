@@ -23,6 +23,7 @@ def handler(event, context):
     lam = boto3.client('lambda')
     
     for report in reports:
+        print('call report {}'.format(report['name']))
         output = '{}/{}'.format(output, report['name'])
         report['output'] = output
         response = lam.invoke(
