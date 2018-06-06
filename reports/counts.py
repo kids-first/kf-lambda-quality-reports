@@ -1,4 +1,5 @@
 import csv
+import gzip
 import os
 import matplotlib
 matplotlib.use('PS')
@@ -39,11 +40,12 @@ def handler(event, context):
 
     counts = by_study(api, endpoints, studies)
 
-    with open('/tmp/counts.csv', 'w') as csv_file:
-        writer = csv.writer(csv_file)
-        writer.writerow(['study_id']+endpoints)
-        for key, value in counts.items():
-            writer.writerow([key]+value)
+    with open('/tmp/counts.csv.gz', 'wb') as csv_file:
+        with gzip.open(csv_file, 'wt') as gz:
+            writer = csv.writer(gz)
+            writer.writerow(['study_id']+endpoints)
+            for key, value in counts.items():
+                writer.writerow([key]+value)
 
     plt.figure(figsize=(15, 10))
     ind = list(range(len(endpoints)))
@@ -63,7 +65,7 @@ def handler(event, context):
     s3 = boto3.client('s3')
     bucket = output.split('/')[0]
     key = '/'.join(output.split('/')[1:])
-    s3.upload_file('/tmp/counts.csv', Bucket=bucket, Key=key+'/counts.csv')
+    s3.upload_file('/tmp/counts.csv.gz', Bucket=bucket, Key=key+'/counts.csv.gz')
     s3.upload_file('/tmp/entity_counts_by_study.png', Bucket=bucket,
                    Key=key+'/entity_counts_by_study.png')
     s3.upload_file('/tmp/entity_counts_by_study_slack.png', Bucket=bucket,
@@ -83,7 +85,7 @@ def handler(event, context):
 
     files = {
         'Entity Counts by Study Breakdown': '/tmp/entity_counts_by_study.png',
-        'Entity Counts by Study Data': '/tmp/counts.csv'
+        'Entity Counts by Study Data': '/tmp/counts.csv.gz'
     }
 
     return attachments, files
