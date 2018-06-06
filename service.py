@@ -5,13 +5,14 @@ def handler(event, context):
     """
     Try to resolve the module from the event, then import and run
     """
-    package = event.get('report', None)
+    package = event.get('module', None)
     if package is None:
         return
 
     sub = package.split('.')[-1]
 
     module = __import__(package, globals(), locals(), [sub], 0)
+    print('calling', module)
     module.handler(event, {})
 
 
