@@ -1,5 +1,7 @@
 import os
 import time
+from base64 import b64decode
+import boto3
 from botocore.vendored import requests
 
 
@@ -7,9 +9,12 @@ def handler(event, context):
     """
     Try to resolve the module from the event, then import and run
     """
-    SLACK_TOKEN = os.environ.get('SLACK_SECRET', None)
-    SLACK_CHANNELS = os.environ.get('SLACK_CHANNEL', '').split(',')
-    SLACK_CHANNELS = [c.replace('#','').replace('@','') for c in SLACK_CHANNELS]
+    if 'SLACK_SECRET' in os.environ and 'SLACK_CHANNEL' in os.environ:
+        kms = boto3.client('kms', region_name='us-east-1')
+        SLACK_SECRET = os.environ.get('SLACK_SECRET', None)
+        SLACK_TOKEN = kms.decrypt(CiphertextBlob=b64decode(SLACK_SECRET)).get('Plaintext', None).decode('utf-8')
+        SLACK_CHANNEL = os.environ.get('SLACK_CHANNEL', '').split(',')
+        SLACK_CHANNEL = [c.replace('#','').replace('@','') for c in SLACK_CHANNEL]
 
     t0 = time.time()
     package = event.get('module', None)
@@ -23,24 +28,26 @@ def handler(event, context):
 
     attachments = [
         {
-            "fallback": "Finished report",
-            "text": "Finished report",
+            "fallback": ":white_check_mark: Finished report",
+            "text": ":white_check_mark: Finished report",
             "fields": [
                 {
                     "title": "Name",
                     "value": event['name'].capitalize(),
-                    "short": true
+                    "short": True
                 },
                 {
-                    "title": "Time Taken",
-                    "value": time.time() - t0,
-                    "short": true
+                    "title": ":clock1: Time Taken",
+                    "value": "{:.2f}".format(time.time() - t0),
+                    "short": True
                 }
             ],
             "color": "good"
         }
     ]
+    print(len(attachments))
     attachments.extend(module.handler(event, context))
+    print(len(attachments))
 
     # Send slack notification
     if SLACK_TOKEN is not None:
