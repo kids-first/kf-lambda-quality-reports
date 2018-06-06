@@ -45,7 +45,7 @@ def handler(event, context):
         for key, value in counts.items():
             writer.writerow([key]+value)
 
-    plt.figure(figsize=(15, 8))
+    plt.figure(figsize=(15, 10))
     ind = list(range(len(endpoints)))
     for k, v in counts.items():
         plt.bar(ind, v, width=0.5, label=k)
@@ -58,6 +58,7 @@ def handler(event, context):
                loc=3, borderaxespad=0.)
     plt.tight_layout()
     plt.savefig('/tmp/entity_counts_by_study.png')
+    plt.savefig('/tmp/entity_counts_by_study_slack.png', dpi=20)
 
     s3 = boto3.client('s3')
     bucket = output.split('/')[0]
@@ -65,6 +66,8 @@ def handler(event, context):
     s3.upload_file('/tmp/counts.csv', Bucket=bucket, Key=key+'/counts.csv')
     s3.upload_file('/tmp/entity_counts_by_study.png', Bucket=bucket,
                    Key=key+'/entity_counts_by_study.png')
+    s3.upload_file('/tmp/entity_counts_by_study_slack.png', Bucket=bucket,
+                   Key=key+'/entity_counts_by_study_slack.png')
 
 
 def by_entity(api, endpoints):
