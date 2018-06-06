@@ -81,7 +81,12 @@ def handler(event, context):
         }
     ]
 
-    return attachments
+    files = {
+        'Entity Counts by Study Breakdown': '/tmp/entity_counts_by_study.png',
+        'Entity Counts by Study Data': '/tmp/counts.csv'
+    }
+
+    return attachments, files
 
 
 def by_study(api, endpoints, studies):

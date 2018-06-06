@@ -38,16 +38,17 @@ def handler(event, context):
                 },
                 {
                     "title": ":clock1: Time Taken",
-                    "value": "{:.2f}".format(time.time() - t0),
+                    "value": "{:.2f}s".format(time.time() - t0),
                     "short": True
                 }
             ],
             "color": "good"
         }
     ]
-    print(len(attachments))
-    attachments.extend(module.handler(event, context))
-    print(len(attachments))
+
+    at, files = module.handler(event, context)
+
+    attachments.append(at)
 
     # Send slack notification
     if SLACK_TOKEN is not None:
@@ -62,6 +63,17 @@ def handler(event, context):
             resp = requests.post('https://slack.com/api/chat.postMessage',
                 headers={'Authorization': 'Bearer '+SLACK_TOKEN},
                 json=message)
+
+        # Upload files
+        for name, path in files.items():
+            print('uploading', name, path)
+            r = requests.post('https://slack.com/api/files.upload',
+                              headers={'Authorization': 'Bearer '+SLACK_TOKEN},
+                              params={'channels': SLACK_CHANNEL,
+                                      'title': name,
+                                      'icon_emoji': ':bar_chart:',
+                                      'username': 'Report Bot'},
+                              files={'file': (path, open(path, 'rb'))})
 
 
 if __name__ == '__main__':
