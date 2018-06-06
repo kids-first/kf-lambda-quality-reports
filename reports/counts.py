@@ -69,16 +69,19 @@ def handler(event, context):
     s3.upload_file('/tmp/entity_counts_by_study_slack.png', Bucket=bucket,
                    Key=key+'/entity_counts_by_study_slack.png')
 
+    s3_url = 'https://s3.amazonaws.com/' + output
+    attachments = [
+        {
+            "fallback": "",
+            "title": "Entity Count Report",
+            "title_link": s3_url,
+            "text": "Entity counts by study",
+            "image_url": s3_url+'/entity_counts_by_study_slack.png',
+            "color": "good"
+        }
+    ]
 
-def by_entity(api, endpoints):
-    """ Get counts by endpoint """
-
-    counts = {}
-    for endpoint in endpoints:
-        resp = requests.get(api+endpoint+'?limit=1')
-        counts[endpoint] = resp.json()['total']
-
-    return counts
+    return attachments
 
 
 def by_study(api, endpoints, studies):
