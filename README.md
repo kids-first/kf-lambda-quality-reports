@@ -47,7 +47,7 @@ be sent to slack after the report is run and the `files` is a dict of
 will be uploaded to slack and titled with `name` as well as uploaded to s3.
 
 Here is a basic example report function demonstrating the minimum format:
-```
+```python
 def handler(event, context):
     attachments = [ { "text": "Hello World" } ]
 
