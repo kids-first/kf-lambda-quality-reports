@@ -47,6 +47,7 @@ def handler(event, context):
             for key, value in counts.items():
                 writer.writerow([key]+value)
 
+    # Plotting
     plt.figure(figsize=(15, 10))
     ind = list(range(len(endpoints)))
     for k, v in counts.items():
@@ -56,9 +57,10 @@ def handler(event, context):
     plt.ylabel('count')
     plt.gca().set_xticks(ind)
     plt.gca().set_xticklabels(endpoints)
-    plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), ncol=4, mode="expand",
-               loc=3, borderaxespad=0.)
+    plt.legend(bbox_to_anchor=(1.0, 1.0), ncol=2, loc=7)
+    plt.title('Entity Counts by Endpoint and Study')
     plt.tight_layout()
+
     plt.savefig('/tmp/entity_counts_by_study.png')
     plt.savefig('/tmp/entity_counts_by_study_slack.png', dpi=20)
 
@@ -103,3 +105,11 @@ def by_study(api, endpoints, studies):
         counts_by_study[study] = by_endpoint
 
     return counts_by_study
+
+
+# For local testing
+if __name__ == '__main__':
+    handler({ "name": "counts",
+            "module": "reports.counts",
+            "output": "kf-reports-us-east-1-env-quality-reports/today/counts/"
+            }, {})
