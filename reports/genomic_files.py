@@ -40,6 +40,7 @@ def handler(event, context):
             for key, value in counts.items():
                 writer.writerow([key]+value)
 
+    # Plotting
     plt.figure(figsize=(15, 10))
     ind = list(range(len(data_types)))
     for k, v in counts.items():
@@ -49,9 +50,10 @@ def handler(event, context):
     plt.ylabel('count')
     plt.gca().set_xticks(ind)
     plt.gca().set_xticklabels(data_types)
-    plt.legend(bbox_to_anchor=(0., 1.02, 1., .102), ncol=4, mode="expand",
-               loc=3, borderaxespad=0.)
+    plt.legend(bbox_to_anchor=(1.0, 1.0), ncol=2, loc=7)
+    plt.title('Genomic File Data Type Distribution by Study')
     plt.tight_layout()
+
     plt.savefig('/tmp/gf_data_types_by_study.png')
     plt.savefig('/tmp/gf_data_types_by_study_slack.png', dpi=20)
 
@@ -88,3 +90,11 @@ def by_study(api, endpoint, studies, data_types):
         counts_by_study[study] = by_data_type
 
     return counts_by_study
+
+
+# For local testing
+if __name__ == '__main__':
+    handler({ "name": "genomic files",
+            "module": "reports.genomic_files",
+            "output": "kf-reports-us-east-1-env-quality-reports/today/genomic_files/"
+            }, {})
