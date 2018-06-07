@@ -11,6 +11,7 @@ def handler(event, context):
     """
     reports = [
         {'name': 'counts', 'module': 'reports.counts'},
+        {'name': 'genomic_files', 'module': 'reports.genomic_files'},
     ]
 
     function = os.environ.get('FUNCTION', None)
