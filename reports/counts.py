@@ -100,6 +100,7 @@ def by_study(api, endpoints, studies):
     for study in studies:
         by_endpoint = []
         for endpoint in endpoints:
+            print('get', api+endpoint+'?limit=1&study_id='+study)
             resp = requests.get(api+endpoint+'?limit=1&study_id='+study)
             by_endpoint.append(resp.json()['total'])
         counts_by_study[study] = by_endpoint

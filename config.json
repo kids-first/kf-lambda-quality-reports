@@ -1,10 +1,12 @@
 {
-  "reports": {
-    "counts": {
+  "reports": [
+    {
+      "name": "counts",
       "module": "reports.counts"
     }, 
-    "genomic files": {
+    {
+      "name": "genomic files",
       "module": "reports.genomic_files"
     }
-  }
+  ]
 }
