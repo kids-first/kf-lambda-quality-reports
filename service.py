@@ -98,6 +98,7 @@ def handler(event, context):
 
         # Upload files to slack
         for name, path in files.items():
+            break
             upload_to_slack(name, path, SLACK_TOKEN, SLACK_CHANNEL)
 
 
@@ -113,12 +114,11 @@ def upload_to_slack(name, path, SLACK_TOKEN, SLACK_CHANNEL):
 
 def upload_to_s3(path, output):
     bucket = output.split('/')[0]
-    key = '/'.join([output[1:]] + [path.split('/')[-1]])
-    print(key)
+    key = '/'.join(output.split('/')[1:] + [path.split('/')[-1]])
     content = None
 
     if key.endswith('gz'):
-        content = 'application/octet-stream'
+        content = None
     elif key.endswith('json'):
         content = 'application/json'
     elif key.endswith('png'):
@@ -130,9 +130,13 @@ def upload_to_s3(path, output):
     else:
         content = 'text/plain'
 
+    args = None
+    if content:
+        args = {'ContentType': content}
+
     s3 = boto3.client('s3')
     s3.upload_file(path, Bucket=bucket, Key=key,
-                   ExtraArgs={'ContentType': content})
+                   ExtraArgs=args)
 
 
 

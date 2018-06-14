@@ -62,19 +62,6 @@ def handler(event, context):
     plt.tight_layout()
 
     plt.savefig('/tmp/entity_counts_by_study.png')
-    plt.savefig('/tmp/entity_counts_by_study_slack.png', dpi=20)
-
-    s3 = boto3.client('s3')
-    bucket = output.split('/')[0]
-    key = '/'.join(output.split('/')[1:])
-    s3.upload_file('/tmp/counts.csv.gz', Bucket=bucket, Key=key+'/counts.csv.gz',
-                   ExtraArgs={'ContentType': 'application/javascript'})
-    s3.upload_file('/tmp/entity_counts_by_study.png', Bucket=bucket,
-                   Key=key+'/entity_counts_by_study.png',
-                   ExtraArgs={'ContentType': 'image/png'})
-    s3.upload_file('/tmp/entity_counts_by_study_slack.png', Bucket=bucket,
-                   Key=key+'/entity_counts_by_study_slack.png',
-                   ExtraArgs={'ContentType': 'image/png'})
 
     s3_url = 'https://s3.amazonaws.com/' + output
     attachments = [

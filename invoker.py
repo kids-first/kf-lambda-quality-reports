@@ -44,6 +44,9 @@ def handler(event, context):
         SLACK_CHANNEL = [c.replace('#','').replace('@','') for c in SLACK_CHANNEL]
 
         for channel in SLACK_CHANNEL:
+            bucket = output.split('/')[0]
+            path = '/'.join(output.split('/')[1:])
+            report_url = f"https://s3.amazonaws.com/{bucket}/index.html#{path}/"
             attachments = [
                 {
                     "fallback": ":runner: Running {} reports".format(len(reports)),
@@ -51,8 +54,8 @@ def handler(event, context):
                     "color": "good"
                 },
                 {
-                    "fallback": "Report will be available at <{}|{}>".format(output+'/', output+'/'),
-                    "text": "Report will be available at <{}|{}>".format(output+'/', output+'/'),
+                    "fallback": "Report will be available at <{}|{}>".format(report_url, report_url),
+                    "text": "Report will be available at <{}|{}>".format(report_url, report_url),
                     "color": "good"
                 }
             ]
