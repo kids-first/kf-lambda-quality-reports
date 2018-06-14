@@ -25,7 +25,7 @@ def handler(event, context):
     lam = boto3.client('lambda')
     
     for report in reports:
-        report_output = '{}/{}'.format(output, report['name'])
+        report_output = '{}/{}'.format(output, report['name'].replace(' ', '_'))
         report['output'] = report_output
         response = lam.invoke(
             FunctionName=function,
