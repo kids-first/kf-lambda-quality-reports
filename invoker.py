@@ -1,6 +1,7 @@
 import os
 import datetime
 import json
+from base64 import b64decode
 import boto3
 from botocore.vendored import requests
 
@@ -33,3 +34,36 @@ def handler(event, context):
         )
         print('invoked report {}'.format(report['name']))
         print('output to {}'.format(report['output']))
+
+    # Send slack message
+    if 'SLACK_SECRET' in os.environ and 'SLACK_CHANNEL' in os.environ:
+        kms = boto3.client('kms', region_name='us-east-1')
+        SLACK_SECRET = os.environ.get('SLACK_SECRET', None)
+        SLACK_TOKEN = kms.decrypt(CiphertextBlob=b64decode(SLACK_SECRET)).get('Plaintext', None).decode('utf-8')
+        SLACK_CHANNEL = os.environ.get('SLACK_CHANNEL', '').split(',')
+        SLACK_CHANNEL = [c.replace('#','').replace('@','') for c in SLACK_CHANNEL]
+
+        for channel in SLACK_CHANNEL:
+            attachments = [
+                {
+                    "fallback": ":runner: Running {} reports".format(len(reports)),
+                    "title": ":runner: Running {} reports".format(len(reports)),
+                    "color": "good"
+                },
+                {
+                    "fallback": "Report will be available at <{}|{}>".format(output+'/', output+'/'),
+                    "text": "Report will be available at <{}|{}>".format(output+'/', output+'/'),
+                    "color": "good"
+                }
+            ]
+            message = {
+                'username': 'Report Bot',
+                'icon_emoji': ':bar_chart:',
+                'channel': channel,
+                'attachments': attachments
+            }
+
+            resp = requests.post('https://slack.com/api/chat.postMessage',
+                headers={'Authorization': 'Bearer '+SLACK_TOKEN},
+                json=message)
+

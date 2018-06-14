@@ -36,8 +36,7 @@ def handler(event, context):
     except Exception:
         failed = True
 
-    report_url = f"https://s3.amazonaws.com/{bucket}/index.html#{path}"
-    print(report_url)
+    report_url = f"https://s3.amazonaws.com/{bucket}/index.html#{path}/"
 
     report_name = "{} report".format(event['name'].capitalize())
     attachments = [
@@ -45,11 +44,16 @@ def handler(event, context):
             "fallback": ":white_check_mark: " + report_name + " completed",
             "title": ":white_check_mark: " + report_name + " completed",
             "title_link": report_url,
-            "text": "<{}|{} files available>".format(report_url, len(files)),
+            "text": f"Report available at <{report_url}|{report_url}>",
+            "color": "good"
+        },
+        {
+            "fallback": ":memo: Report summar",
+            "title": ":memo: Report summary",
             "fields": [
                 {
-                    "title": ":memo: Name",
-                    "value": report_name,
+                    "title": ":open_file_folder: Files Available",
+                    "value": len(files),
                     "short": True
                 },
                 {
@@ -74,6 +78,10 @@ def handler(event, context):
             }
         ]
 
+    # Upload files to s3
+    for name, path in files.items():
+        upload_to_s3(path, output)
+
     # Send slack notification
     if SLACK_TOKEN is not None:
         for channel in SLACK_CHANNEL:
@@ -88,16 +96,44 @@ def handler(event, context):
                 headers={'Authorization': 'Bearer '+SLACK_TOKEN},
                 json=message)
 
-        # Upload files
+        # Upload files to slack
         for name, path in files.items():
-            print('uploading', name, path)
-            r = requests.post('https://slack.com/api/files.upload',
-                              headers={'Authorization': 'Bearer '+SLACK_TOKEN},
-                              params={'channels': SLACK_CHANNEL,
-                                      'title': name,
-                                      'icon_emoji': ':bar_chart:',
-                                      'username': 'Report Bot'},
-                              files={'file': (path, open(path, 'rb'))})
+            upload_to_slack(name, path, SLACK_TOKEN, SLACK_CHANNEL)
+
+
+def upload_to_slack(name, path, SLACK_TOKEN, SLACK_CHANNEL):
+    r = requests.post('https://slack.com/api/files.upload',
+                      headers={'Authorization': 'Bearer '+SLACK_TOKEN},
+                      params={'channels': SLACK_CHANNEL,
+                              'title': name,
+                              'icon_emoji': ':bar_chart:',
+                              'username': 'Report Bot'},
+                      files={'file': (path, open(path, 'rb'))})
+
+
+def upload_to_s3(path, output):
+    bucket = output.split('/')[0]
+    key = '/'.join([output[1:]] + [path.split('/')[-1]])
+    print(key)
+    content = None
+
+    if key.endswith('gz'):
+        content = 'application/octet-stream'
+    elif key.endswith('json'):
+        content = 'application/json'
+    elif key.endswith('png'):
+        content = 'image/png'
+    elif key.endswith('jpg') or key.endswith('.jpeg'):
+        content = 'image/jpeg'
+    elif key.endswith('csv'):
+        content = 'text/csv'
+    else:
+        content = 'text/plain'
+
+    s3 = boto3.client('s3')
+    s3.upload_file(path, Bucket=bucket, Key=key,
+                   ExtraArgs={'ContentType': content})
+
 
 
 if __name__ == '__main__':
