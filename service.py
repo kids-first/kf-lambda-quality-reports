@@ -9,6 +9,7 @@ def handler(event, context):
     """
     Try to resolve the module from the event, then import and run
     """
+    t0 = time.time()
     if 'SLACK_SECRET' in os.environ and 'SLACK_CHANNEL' in os.environ:
         kms = boto3.client('kms', region_name='us-east-1')
         SLACK_SECRET = os.environ.get('SLACK_SECRET', None)
@@ -16,24 +17,39 @@ def handler(event, context):
         SLACK_CHANNEL = os.environ.get('SLACK_CHANNEL', '').split(',')
         SLACK_CHANNEL = [c.replace('#','').replace('@','') for c in SLACK_CHANNEL]
 
-    t0 = time.time()
+    env = event.get('ENV', 'dev')
     package = event.get('module', None)
     if package is None:
         return
+    output = event.get('output', None)
+    bucket = output.split('/')[0]
+    path = '/'.join(output.split('/')[1:])
 
     sub = package.split('.')[-1]
 
     module = __import__(package, globals(), locals(), [sub], 0)
     print('calling', module)
 
+    failed = False
+    try:
+        at, files = module.handler(event, context)
+    except Exception:
+        failed = True
+
+    report_url = f"https://s3.amazonaws.com/{bucket}/index.html#{path}"
+    print(report_url)
+
+    report_name = "{} report".format(event['name'].capitalize())
     attachments = [
         {
-            "fallback": ":white_check_mark: Finished report",
-            "text": ":white_check_mark: Finished report",
+            "fallback": ":white_check_mark: " + report_name + " completed",
+            "title": ":white_check_mark: " + report_name + " completed",
+            "title_link": report_url,
+            "text": "<{}|{} files available>".format(report_url, len(files)),
             "fields": [
                 {
-                    "title": "Name",
-                    "value": event['name'].capitalize(),
+                    "title": ":memo: Name",
+                    "value": report_name,
                     "short": True
                 },
                 {
@@ -46,9 +62,17 @@ def handler(event, context):
         }
     ]
 
-    at, files = module.handler(event, context)
 
-    attachments.append(at)
+    if not failed:
+        attachments.append(at)
+    else:
+        attachments = [
+            {
+                "fallback": ":x: " + report_name + " failed",
+                "title": ":x: " + report_name + " failed",
+                "color": "error"
+            }
+        ]
 
     # Send slack notification
     if SLACK_TOKEN is not None:
