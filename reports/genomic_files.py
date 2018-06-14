@@ -57,17 +57,6 @@ def handler(event, context):
     plt.savefig('/tmp/gf_data_types_by_study.png')
     plt.savefig('/tmp/gf_data_types_by_study_slack.png', dpi=20)
 
-    s3 = boto3.client('s3')
-    bucket = output.split('/')[0]
-    key = '/'.join(output.split('/')[1:])
-    s3.upload_file('/tmp/datatypes.csv.gz', Bucket=bucket, Key=key+'/datatypes.csv.gz')
-    s3.upload_file('/tmp/gf_data_types_by_study.png', Bucket=bucket,
-                   Key=key+'/gf_data_types_by_study.png')
-    s3.upload_file('/tmp/gf_data_types_by_study_slack.png', Bucket=bucket,
-                   Key=key+'/gf_data_types_by_study_slack.png')
-
-    s3_url = 'https://s3.amazonaws.com/' + output
-
     attachments = []
 
     files = {
