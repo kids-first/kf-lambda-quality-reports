@@ -44,12 +44,10 @@ def handler(event, context):
             "fallback": ":white_check_mark: " + report_name + " completed",
             "title": ":white_check_mark: " + report_name + " completed",
             "title_link": report_url,
-            "text": f"Report available at <{report_url}|{report_url}>",
             "color": "good"
         },
         {
             "fallback": ":memo: Report summar",
-            "title": ":memo: Report summary",
             "fields": [
                 {
                     "title": ":open_file_folder: Files Available",
