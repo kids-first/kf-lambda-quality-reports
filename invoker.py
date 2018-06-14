@@ -9,10 +9,10 @@ def handler(event, context):
     """
     Invokes the main function for each report module
     """
-    reports = [
-        {'name': 'counts', 'module': 'reports.counts'},
-        {'name': 'genomic_files', 'module': 'reports.genomic_files'},
-    ]
+    with open('config.json') as f:
+        config = json.load(f)
+
+    reports = config['reports']
 
     function = os.environ.get('FUNCTION', None)
     env = os.environ.get('ENV', None)

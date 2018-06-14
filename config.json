@@ -1,0 +1,10 @@
+{
+  "reports": {
+    "counts": {
+      "module": "reports.counts"
+    }, 
+    "genomic files": {
+      "module": "reports.genomic_files"
+    }
+  }
+}
