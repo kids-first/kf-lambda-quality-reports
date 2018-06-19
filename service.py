@@ -33,20 +33,26 @@ def handler(event, context):
     failed = False
     try:
         at, files = module.handler(event, context)
-    except Exception:
+    except Exception as err:
+        print(err)
         failed = True
+        at = []
+        files = {}
 
     report_url = f"https://s3.amazonaws.com/{bucket}/index.html#{path}/"
 
     report_name = "{} report".format(event['name'].capitalize())
-    attachments = [
-        {
+
+    attachments = []
+    if not failed:
+        attachments.append({
             "fallback": ":white_check_mark: " + report_name + " completed",
             "title": ":white_check_mark: " + report_name + " completed",
             "title_link": report_url,
             "color": "good"
-        },
-        {
+        })
+
+        attachments.append({
             "fallback": ":memo: Report summar",
             "fields": [
                 {
@@ -61,18 +67,14 @@ def handler(event, context):
                 }
             ],
             "color": "good"
-        }
-    ]
-
-
-    if not failed:
-        attachments.append(at)
+        })
+        attachments.extend(at)
     else:
         attachments = [
             {
-                "fallback": ":x: " + report_name + " failed",
-                "title": ":x: " + report_name + " failed",
-                "color": "error"
+                "fallback": ":x: I'm very sorry, but  " + report_name + " failed :(",
+                "title": ":x: I'm very sorry, but " + report_name + " failed :(",
+                "color": "danger"
             }
         ]
 
