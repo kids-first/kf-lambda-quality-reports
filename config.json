@@ -7,6 +7,15 @@
     {
       "name": "genomic files",
       "module": "reports.genomic_files"
+    },
+    {
+      "name": "phenotypes",
+      "module": "reports.phenotypes"
+    },
+    {
+      "name": "SQL Counts",
+      "module": "reports.sql_report",
+      "query_statement": "SELECT count(*) FROM participant;"
     }
   ]
 }

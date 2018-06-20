@@ -23,7 +23,6 @@ def handler(event, context):
                             credentials.secret_key,
                             credentials.token)
     secret = client.read(path)['data']
-    print('read secret')
 
     conn = psycopg2.connect(
             host=secret['hostname'],

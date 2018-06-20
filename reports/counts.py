@@ -64,23 +64,13 @@ def handler(event, context):
     plt.savefig('/tmp/entity_counts_by_study.png')
 
     s3_url = 'https://s3.amazonaws.com/' + output
-    attachments = [
-        {
-            "fallback": "",
-            "title": "Entity Count Report",
-            "title_link": s3_url,
-            "text": "Entity counts by study",
-            "image_url": s3_url+'/entity_counts_by_study_slack.png',
-            "color": "good"
-        }
-    ]
 
     files = {
         'Entity Counts by Study Breakdown': '/tmp/entity_counts_by_study.png',
         'Entity Counts by Study Data': '/tmp/counts.csv.gz'
     }
 
-    return attachments, files
+    return [], files
 
 
 def by_study(api, endpoints, studies):
