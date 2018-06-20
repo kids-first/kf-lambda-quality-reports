@@ -3,6 +3,7 @@ import csv
 import hvac
 import boto3
 import psycopg2
+import psycopg2.extras
 
 def handler(event, context):
     env = os.environ.get('ENV')
@@ -22,7 +23,6 @@ def handler(event, context):
                             credentials.secret_key,
                             credentials.token)
     secret = client.read(path)['data']
-    print('read secret')
 
     conn = psycopg2.connect(
             host=secret['hostname'],
@@ -30,23 +30,27 @@ def handler(event, context):
             user=secret['username'],
             password=secret['password'])
 
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
     cur.execute(query)
 
-    path = '/tmp/report.csv'
-    with open(path, 'w') as f:
-        writer = csv.writer(f)
-        for line in cur.fetchall():
+    fpath = '/tmp/report.csv'
+    with open(fpath, 'w') as f:
+        data = cur.fetchone()
+        writer = csv.DictWriter(f, fieldnames=data.keys())
+        writer.writeheader()
+        writer.writerow(data)
+        for line in cur:
             writer.writerow(line)
 
     cur.close()
     conn.close()
-    return [], {'Report': path}
+    return [], {'Report': fpath}
 
 
 # For local testing
 if __name__ == '__main__':
     handler({"name": "phenotypes",
             "module": "reports.phenotypes",
-            "output": "kf-reports-us-east-1-env-quality-reports/today/phenotypes/"
+            "output": "kf-reports-us-east-1-env-quality-reports/today/phenotypes/",
+            "query_statement": "select s.external_id,s.kf_id, b.dbgap_consent_code, count(b.*) from biospecimen b join participant p on b.participant_id = p.kf_id join study s on p.study_id = s.kf_id group by s.external_id,s.kf_id, b.dbgap_consent_code order by s.kf_id, b.dbgap_consent_code"
             }, {})
