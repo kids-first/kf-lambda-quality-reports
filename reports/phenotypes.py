@@ -22,7 +22,9 @@ def handler(event, context):
     r = client.auth_aws_iam(credentials.access_key,
                             credentials.secret_key,
                             credentials.token)
-    secret = client.read(path)['data']
+    secret = client.read(path)
+    print(secret.keys())
+    secret = secret['data']
 
     conn = psycopg2.connect(
             host=secret['hostname'],
@@ -52,6 +54,9 @@ def handler(event, context):
         writer = csv.writer(f)
         writer.writerow(['source text phenotype', 'count', 'study_id'])
         for v in data:
+            if len(v) != 3:
+                print(v)
+                continue
             by_pheno[v[0]] += v[1]
             by_study[v[2]][v[0]] += v[1]
             writer.writerow(v)
