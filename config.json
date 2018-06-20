@@ -7,6 +7,10 @@
     {
       "name": "genomic files",
       "module": "reports.genomic_files"
+    },
+    {
+      "name": "phenotypes",
+      "module": "reports.phenotypes"
     }
   ]
 }
