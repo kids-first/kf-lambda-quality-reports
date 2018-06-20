@@ -1,4 +1,5 @@
 import os
+import csv
 import hvac
 import boto3
 import psycopg2
@@ -7,6 +8,11 @@ def handler(event, context):
     env = os.environ.get('ENV')
     vault_url = os.environ.get('VAULT_URL')
     path = os.environ.get('DATASERVICE_PG_SECRET')
+
+    if 'query_statement' not in event:
+        raise Exception('must include a query_statement for sql reports!')
+
+    query = event['query_statement']
 
     client = hvac.Client(url=vault_url)
 
@@ -25,16 +31,17 @@ def handler(event, context):
             password=secret['password'])
 
     cur = conn.cursor()
+    cur.execute(query)
 
-    cur.execute("""
-    SELECT phenotype.source_text_phenotype, count(phenotype.source_text_phenotype), study.kf_id AS study_id FROM phenotype, participant, study
-    WHERE phenotype.participant_id = participant.kf_id and participant.study_id = study.kf_id
-    GROUP BY phenotype.source_text_phenotype,study.kf_id;
-    """)
-    print(cur.fetchall())
+    path = '/tmp/report.csv'
+    with open(path, 'w') as f:
+        writer = csv.writer(f)
+        for line in cur.fetchall():
+            writer.writerow(line)
+
     cur.close()
     conn.close()
-    return [], {}
+    return [], {'Report': path}
 
 
 # For local testing
