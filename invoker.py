@@ -42,23 +42,28 @@ def handler(event, context):
         SLACK_TOKEN = kms.decrypt(CiphertextBlob=b64decode(SLACK_SECRET)).get('Plaintext', None).decode('utf-8')
         SLACK_CHANNEL = os.environ.get('SLACK_CHANNEL', '').split(',')
         SLACK_CHANNEL = [c.replace('#','').replace('@','') for c in SLACK_CHANNEL]
+        TRACKER_URL = os.environ.get('REPORT_TRACKER', '')
 
         for channel in SLACK_CHANNEL:
             bucket = output.split('/')[0]
             path = '/'.join(output.split('/')[1:])
             report_url = f"https://s3.amazonaws.com/{bucket}/index.html#{path}/"
-            attachments = [
-                {
-                    "fallback": ":runner: Running {} reports".format(len(reports)),
-                    "title": ":runner: Running {} reports".format(len(reports)),
-                    "color": "good"
-                },
-                {
-                    "fallback": "Report will be available at <{}|{}>".format(report_url, report_url),
-                    "text": "Report will be available at <{}|{}>".format(report_url, report_url),
-                    "color": "good"
-                }
-            ]
+            attachments = [{
+                "text": "{} tasty reports ready for viewing".format(len(reports)),
+                "fallback": "{} tasty reports ready for viewing".format(len(reports)),
+                "callback_id": "view_report",
+                "color": "#3AA3E3",
+                "attachment_type": "default",
+                "actions": [
+                    {
+                        "name": "overview",
+                        "text": "View Now",
+                        "type": "button",
+                        "url": f'{TRACKER_URL}?url='+report_url,
+                        "style": "primary"
+                    }
+                ]
+            }]
             message = {
                 'username': 'Report Bot',
                 'icon_emoji': ':bar_chart:',
