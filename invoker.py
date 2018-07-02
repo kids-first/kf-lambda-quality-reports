@@ -68,7 +68,8 @@ def handler(event, context):
                 'username': 'Report Bot',
                 'icon_emoji': ':bar_chart:',
                 'channel': channel,
-                'attachments': attachments
+                'attachments': attachments,
+                'text': 'New reports are in hot and fresh :pie:'
             }
 
             resp = requests.post('https://slack.com/api/chat.postMessage',

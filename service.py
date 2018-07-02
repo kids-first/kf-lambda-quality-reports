@@ -82,6 +82,8 @@ def handler(event, context):
     for name, path in files.items():
         upload_to_s3(path, output)
 
+    return
+
     # Send slack notification
     if SLACK_TOKEN is not None:
         for channel in SLACK_CHANNEL:
