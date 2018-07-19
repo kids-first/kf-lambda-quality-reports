@@ -22,7 +22,7 @@ def handler(event, context):
         report_output = f"{output}/{study_id}_QC_report"
         report = {
             'name': f"{study_id} QC Report",
-            'module': 'reports.study_report.py',
+            'module': 'reports.study_report',
             'output': report_output,
             'study_id': study_id
         }

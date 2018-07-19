@@ -39,7 +39,7 @@ def handler(event, context):
     study_id = event.get('study_id')
     output = event.get('output')
     conn_str = get_pg_connection_str()
-    g = ReportGenerator(study_id, output=f"/tmp/{study_id}/", conn_str=conn_str)
+    g = ReportGenerator(study_id, output=f"/tmp/", conn_str=conn_str)
     g.make_report()
 
     files = set(glob.glob('/tmp/**/*.png', recursive=True))
@@ -76,7 +76,7 @@ class ReportGenerator:
         }
         html_out = template.render(template_vars)
 
-        filename = f'{self.study_id}_QCReport.pdf'
+        filename = f'{self.study_id}_QC_Report.pdf'
         with open(self.output+filename, "w+b") as out_pdf_file_handle:
             pisa.CreatePDF(
                 src=html_out,
