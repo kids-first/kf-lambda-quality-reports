@@ -119,7 +119,7 @@ def upload_to_slack(name, path, SLACK_TOKEN, SLACK_CHANNEL):
 
 def upload_to_s3(path, output):
     bucket = output.split('/')[0]
-    key = '/'.join(output.split('/')[1:] + [path.split('/')[-1]])
+    key = '/'.join(output.split('/')[1:] + ['/'.join(path.split('/')[1:])])
     content = None
 
     if key.endswith('gz'):
@@ -132,6 +132,8 @@ def upload_to_s3(path, output):
         content = 'image/jpeg'
     elif key.endswith('csv'):
         content = 'text/csv'
+    if key.endswith('pdf'):
+        content = 'application/pdf'
     else:
         content = 'text/plain'
 
