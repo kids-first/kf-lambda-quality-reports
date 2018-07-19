@@ -1,4 +1,6 @@
 import os
+import traceback
+import sys
 import time
 from base64 import b64decode
 import boto3
@@ -35,6 +37,7 @@ def handler(event, context):
         at, files = module.handler(event, context)
     except Exception as err:
         print(err)
+        traceback.print_exc(file=sys.stdout)
         failed = True
         at = []
         files = {}
