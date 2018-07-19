@@ -16,6 +16,11 @@
       "name": "Consent Codes",
       "module": "reports.sql_report",
       "query_statement": "select s.external_id,s.kf_id, b.dbgap_consent_code, count(b.*) from biospecimen b join participant p on b.participant_id = p.kf_id join study s on p.study_id = s.kf_id group by s.external_id,s.kf_id, b.dbgap_consent_code order by s.kf_id, b.dbgap_consent_code"
+    },
+    {
+      "name": "Study Reports",
+      "module": "reports.study_reports",
+      "query_statement": "select s.external_id,s.kf_id, b.dbgap_consent_code, count(b.*) from biospecimen b join participant p on b.participant_id = p.kf_id join study s on p.study_id = s.kf_id group by s.external_id,s.kf_id, b.dbgap_consent_code order by s.kf_id, b.dbgap_consent_code"
     }
   ]
 }
