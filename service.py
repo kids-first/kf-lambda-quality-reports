@@ -134,6 +134,8 @@ def upload_to_s3(path, output):
         content = 'text/csv'
     if key.endswith('pdf'):
         content = 'application/pdf'
+    if key.endswith('html') or key.endswith('htm'):
+        content = 'text/html'
     else:
         content = 'text/plain'
 
