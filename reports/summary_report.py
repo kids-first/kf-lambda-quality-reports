@@ -5,6 +5,7 @@ import glob
 import pandas as pd
 import boto3
 from botocore.vendored import requests
+from collections import defaultdict
 
 from xhtml2pdf import pisa
 from jinja2 import Environment, FileSystemLoader
@@ -69,6 +70,7 @@ class SummaryGenerator:
             self.output += self.study_id+'/'
 
         os.makedirs(self.output+'tables', exist_ok=True)
+        os.makedirs(self.output+'diffs', exist_ok=True)
 
     def make_report(self):
         """
@@ -89,8 +91,8 @@ class SummaryGenerator:
             summary.to_csv(f'{self.output}tables/{name}.csv')
 
         # Print report to pdf
-        env = Environment(loader=FileSystemLoader('.'))
-        template = env.get_template("reports/summary_template.html")
+        env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__))))
+        template = env.get_template("summary_template.html")
 
         template_vars = {
             "title": "Data Summary Report",
@@ -112,6 +114,24 @@ class SummaryGenerator:
             pisa.CreatePDF(
                 src=html_out,
                 dest=out_pdf_file_handle)
+
+    def compute_diffs(self, summaries):
+        """
+        For each summary table, try to find yesterday's summary table and 
+        compare the two
+        """
+
+        diffs = {}
+        for name, summary in summaries:
+            if f'{name}.csv' in os.listdir(self.output+'tables'):
+                df = pd.read_csv(self.output+'tables/'+name+'.csv')
+                diffs[name] = self.compute_diff(summary, df)
+
+    def compute_diff(self, today, yesterday):
+        """
+        Compares today to yesterday by subtracting today from yesterday
+        """
+        return today - yesterday
 
 
 def table_report(df):
@@ -144,6 +164,104 @@ def column_report(df, col):
                        .reset_index()
                        .rename(columns={'index':'count'}))
     return counts
+
+
+class DiffGenerator:
+
+    def __init__(self, output='/tmp/', today='', yesterday=''):
+        """
+        :param today: A directory path where to find all of today's summaries
+        :param yesterday: A directory where to find all of yesterday's summaries
+        """
+        if not os.path.isdir(today) or not os.path.isdir(yesterday):
+            raise 'Please provide valid directory paths'
+
+        self.output = output
+        self.today_path = today
+        self.yesterday_path = yesterday
+        self.today_files = os.listdir(today)
+        self.yesterday_files = os.listdir(yesterday)
+
+    def make_report(self):
+        diffs = self.compute_diffs()
+
+        env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__))))
+        template = env.get_template("summary_template.html")
+
+        template_vars = {
+            "title": "Data Summary Report",
+            "date": datetime.now(),
+            "sections": diffs
+        }
+        # Render and save HTML
+        html_out = template.render(template_vars)
+        filename = f'Table_Diff_Report.html'
+        with open(self.output+filename, "w+") as f:
+            f.write(html_out)
+
+    def compute_diffs(self):
+
+        sections = defaultdict(dict)
+        for f in set(self.today_files).intersection(self.yesterday_files):
+            section = f.split('_')[0]
+            name = f[f.find('_')+1:].replace('.csv', '')
+            df1 = pd.read_csv(os.path.join(self.today_path, f), index_col=0)
+            df2 = pd.read_csv(os.path.join(self.yesterday_path, f), index_col=0)
+            sections[section][name] = self.compute_diff(df1, df2)
+            
+
+        return sections
+
+    def compute_diff(self, df1, df2):
+        df = pd.concat([df1, df2], 
+                        axis='columns',
+                        keys=['DF1', 'DF2'])
+
+        diff = pd.DataFrame(columns=set(df.columns.get_level_values(1)))
+        for c in set(df.columns.get_level_values(1)):
+            if c not in df['DF1'].columns:
+                diff[c] = df['DF2'][c]
+            elif c not in df['DF2'].columns:
+                diff[c] = df['DF1'][c]
+            else:
+                diff[c] = df.xs(c, level=1, drop_level=1, axis=1) \
+                            .apply(self.differ, axis=1)
+            
+        diff.style.applymap(self.highlight_diff)
+        return diff
+
+    def highlight_diff(self, value):
+        if value == 0 or value is None:
+            return ''
+        
+        try:
+            int(value)
+            if value < 0:
+                return 'background-color: #dc3545'
+            elif value > 0:
+                return 'background-color: #28a745'
+            else:
+                return ''
+        except ValueError as verr:
+            if value.endswith(')'):
+                return 'background-color: #ffc107'
+        return ''
+
+    def differ(self, r):
+        first = r['DF1']
+        second = r['DF1']
+        try:
+            first = int(first)
+            second = int(second)
+            if first != second:
+                print(first, second)
+        except ValueError as verr:
+            if first != second:
+                return f'+{first} (-{second})'
+            else:
+                return first
+        return first - second
+
 
 
 # For local testing
