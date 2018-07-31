@@ -23,6 +23,9 @@
         nav[data-toggle='toc'] .nav .active .nav {
           display: block;
         }
+        table td, table th {
+          text-align: center;
+        }
     </style>
     
 </head>
@@ -31,7 +34,7 @@
   <div class="jumbotron jumbotron-fluid">
     <div class="container">
       <h1 data-toc-skip class="display-2">
-        Table Summary Report
+        {{ title }}
       </h1>
       <h1 data-toc-skip class="display-4 text-muted">{{ date.strftime('%b %d, %Y') }}</h1>
     </div>
@@ -63,7 +66,13 @@
                 <div class="row m-1">
                   <div class="col">
                     <div class="table-responive">
+                      {% if summary.to_html %}
                       {{ summary.to_html(classes=['table', 'table-striped', 'table-hover'], border=0).replace('dataframe ','').replace(' border="1"','') }}
+                      {% elif summary %}
+                      {{ summary.render() }}
+                      {% else %}
+                      No changes to report
+                      {% endif %}
                     </div>
                   </div>
                 </div>
