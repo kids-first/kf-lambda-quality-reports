@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import hvac
 import re
 import os
@@ -50,7 +50,7 @@ def handler(event, context):
     output = event.get('output')
     conn_str = get_pg_connection_str()
 
-    g = SummaryGenerator(output=f"/tmp/", conn_str=conn_str)
+    g = SummaryGenerator(output=f"/tmp/", s3output=output, conn_str=conn_str)
     g.make_report()
 
     # Collect all files in /tmp
@@ -64,14 +64,16 @@ def handler(event, context):
 
 class SummaryGenerator:
 
-    def __init__(self, study_id=None, output='', conn_str=''):
+    def __init__(self, study_id=None, output='', s3output='', conn_str=''):
         self.study_id = study_id
         self.conn_str = conn_str
         self.output = output
+        self.s3output = s3output
         if self.study_id is not None:
             self.output += self.study_id+'/'
 
         os.makedirs(self.output+'tables', exist_ok=True)
+        os.makedirs(self.output+'yesterday', exist_ok=True)
         os.makedirs(self.output+'diffs', exist_ok=True)
 
     def make_report(self):
@@ -103,16 +105,11 @@ class SummaryGenerator:
         }
         # Render and save HTML
         html_out = template.render(template_vars)
-        filename = f'Table_Summary_Report.html'
+        filename = f"Table_Summary_Report_{datetime.now().strftime('%Y%m%d')}.html"
         with open(self.output+filename, "w+") as f:
             f.write(html_out)
 
-        diff = DiffGenerator(output=self.output+'diffs/',
-                             today=self.output+'tables/',
-                             summaries=table_summaries,
-                             yesterday=self.output+'yesterday/')
-        diff.make_report()
-
+        self.make_diff_report(table_summaries)
 
         # DO NOT save to pdf for now. We don't do any table size checking
         return
@@ -124,12 +121,45 @@ class SummaryGenerator:
                 src=html_out,
                 dest=out_pdf_file_handle)
 
-    def compute_diff(self, today, yesterday):
+    def make_diff_report(self, table_summaries):
         """
-        Compares today to yesterday by subtracting today from yesterday
+        Download all of yesterday's summary tables then build the diff report
+        Derive yesterdays s3 location based on the output for this report
         """
-        return today - yesterday
+        m = re.match(r'.*/(\d{8})-reports/.*', self.s3output)
+        if not m or not m.groups(1) or len(m.groups(1)) == 0:
+            print(f"yesterday's date could not be resolved: {m}")
+            return
+        yesterday = datetime.strptime(m.groups(1)[0], '%Y%m%d') - timedelta(days=1)
+        yesterday = datetime.strftime(yesterday, '%Y%m%d')
+        yesterday_path = self.s3output.replace(m.groups(1)[0], yesterday)
+        yesterday_path = yesterday_path + '/tables/'
+        bucket = yesterday_path.split('/')[0]
+        yesterday_path = '/'.join(yesterday_path.split('/')[1:])
 
+        client = boto3.client('s3')
+        paginator = client.get_paginator('list_objects')
+        print(f'Downloading all summaries from {bucket}{yesterday_path}')
+
+        for page in paginator.paginate(Bucket=bucket, Prefix=yesterday_path):
+            if 'Contents' not in page or len(page['Contents']) == 0:
+                print('Could not find data from yesterday')
+                return
+            for obj in page['Contents']:
+                fname = obj['Key'].split('/')[-1]
+                client.download_file(bucket,
+                                     obj['Key'],
+                                     self.output+'yesterday/'+fname)
+
+
+        diff = DiffGenerator(output=self.output+'diffs/',
+                             summaries=table_summaries,
+                             yesterday=self.output+'yesterday/')
+        diff.make_report()
+
+        # Remove yesterday's data so it's not uploaded again
+        import shutil
+        shutil.rmtree(self.output+'yesterday')
 
 def table_report(df):
     """
@@ -165,18 +195,17 @@ def column_report(df, col):
 
 class DiffGenerator:
 
-    def __init__(self, output='/tmp/', today='', yesterday='', summaries=None):
+    def __init__(self, output='/tmp/', yesterday=None, summaries=None):
         """
-        :param today: A directory path where to find all of today's summaries
+        :param output: The directory to output all diff tables
+        :param summaries: The summary tables for the current state
         :param yesterday: A directory where to find all of yesterday's summaries
         """
-        if not os.path.isdir(today) or not os.path.isdir(yesterday):
-            raise Exception(f'Please provide valid directory paths {today} {yesterday}')
+        if not os.path.isdir(yesterday):
+            raise Exception(f'Please provide valid directory paths')
 
         self.output = output
-        self.today_path = today
         self.yesterday_path = yesterday
-        self.today_files = os.listdir(today)
         self.yesterday_files = os.listdir(yesterday)
 
         summaries = {f'{k1}_{k2}': v2 for k1, v1 in summaries.items()
@@ -196,7 +225,7 @@ class DiffGenerator:
         }
         # Render and save HTML
         html_out = template.render(template_vars)
-        filename = f'Table_Diff_Report.html'
+        filename = f"../Table_Diff_Report_{datetime.now().strftime('%Y%m%d')}.html"
         with open(self.output+filename, "w+") as f:
             f.write(html_out)
 
@@ -214,7 +243,6 @@ class DiffGenerator:
             section = f.split('_')[0]
             name = f[f.find('_')+1:].replace('.csv', '')
 
-            # df1 = pd.read_csv(os.path.join(self.today_path, f), index_col=0)
             df2_path = os.path.join(self.yesterday_path, f+'.csv')
             # Don't try to diff if it's a summary that didn't exist yesterday
             if not os.path.exists(df2_path):
