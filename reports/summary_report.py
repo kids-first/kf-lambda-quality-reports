@@ -248,15 +248,45 @@ class DiffGenerator:
             if not os.path.exists(df2_path):
                 continue
             df2 = pd.read_csv(df2_path, index_col=0)
-            sections[section][name] = self.compute_diff(df1, df2)
-            sections[section][name].to_csv(f'{self.output}{section}_{name}_diff.csv')
+
+            if len(df1.columns) == 2 and df1.columns[1] == 'count':
+                sections[section][name] = self.count_diff(df1, df2)
+                sections[section][name].to_csv(f'{self.output}{section}_{name}_diff.csv')
+            else:
+                sections[section][name] = self.compute_diff(df1, df2)
+                sections[section][name].to_csv(f'{self.output}{section}_{name}_diff.csv')
             # Don't try to style an empty diff and just return None
             if sections[section][name].shape[0] == 0:
                 sections[section][name] = None
                 continue
-            sections[section][name] = sections[section][name].style.applymap(self.highlight_diff).set_table_attributes('class="table table-striped table-hover"')
+            # sections[section][name] = sections[section][name].style.applymap(self.highlight_diff).set_table_attributes('class="table table-striped table-hover"')
+            sections[section][name] = sections[section][name].style.set_table_attributes('class="table table-striped table-hover"')
 
         return sections
+
+    def count_diff(self, df1, df2):
+        def diff_format(r):
+            return f"{int(r['count'])} ({int(r['change']):+})"
+
+        def diff_html(r):
+            change = f"{int(r['change']):+}"
+            color = ''
+            if r['change'] > 0:
+                color = 'text-success'
+            elif r['change'] < 0:
+                color = 'text-danger'
+            else:
+                color = 'text-color'
+            change = f'(<span class="{color}">{change}</span>)'
+            return f"{int(r['count'])} {change}"
+
+        diff = df2.merge(df1, how='outer', on=df1.columns[0], suffixes=['', '_yesterday']).fillna(0)
+        diff['change'] = diff['count'] - diff['count_yesterday']
+        diff = diff.sort_values(['change', 'count'], ascending=False).reset_index(drop=True)
+        diff['summary'] = diff.apply(diff_format, axis=1)
+        diff['summary_html'] = diff.apply(diff_html, axis=1)
+        diff = diff[diff['change'] != 0]
+        return diff
 
     def compute_diff(self, df1, df2):
         """
