@@ -278,7 +278,7 @@ class DiffGenerator:
                             .apply(self.differ, axis=1)
 
         if 'count' in diff.columns:
-            diff = diff[~diff['count'].str.endswith('(+0)')]
+            diff = diff[~diff['count'].str.endswith('(+0)', na=True)]
             diff = diff[list(set(diff.columns) - {'count'}) + ['count']]
             
         return diff
