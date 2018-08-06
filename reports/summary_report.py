@@ -4,6 +4,7 @@ import re
 import os
 import glob
 import pandas as pd
+import numpy as np
 import boto3
 from botocore.vendored import requests
 from collections import defaultdict
