@@ -249,9 +249,15 @@ class DiffGenerator:
                 continue
             df2 = pd.read_csv(df2_path, index_col=0)
 
+            # Diff using k: v dictonary comparison
             if len(df1.columns) == 2 and df1.columns[1] == 'count':
                 sections[section][name] = self.count_diff(df1, df2)
                 sections[section][name].to_csv(f'{self.output}{section}_{name}_diff.csv')
+                sections[section][name] = sections[section][name]\
+                        .drop(['count', 'change', 'summary', 'count_yesterday'],
+                                             axis=1)\
+                        .rename(columns={'summary_html': 'change'})
+            # Diff for wide tables with strings
             else:
                 sections[section][name] = self.compute_diff(df1, df2)
                 sections[section][name].to_csv(f'{self.output}{section}_{name}_diff.csv')
@@ -265,10 +271,16 @@ class DiffGenerator:
         return sections
 
     def count_diff(self, df1, df2):
+        """
+        Compares two dataframes by converting to dicts
+        """
         def diff_format(r):
             return f"{int(r['count'])} ({int(r['change']):+})"
 
         def diff_html(r):
+            """
+            Wraps values in span tags for display in web page
+            """
             change = f"{int(r['change']):+}"
             color = ''
             if r['change'] > 0:
@@ -280,7 +292,8 @@ class DiffGenerator:
             change = f'(<span class="{color}">{change}</span>)'
             return f"{int(r['count'])} {change}"
 
-        diff = df2.merge(df1, how='outer', on=df1.columns[0], suffixes=['', '_yesterday']).fillna(0)
+        diff = df2.merge(df1, how='outer', on=df1.columns[0],
+                         suffixes=['_yesterday', '']).fillna(0)
         diff['change'] = diff['count'] - diff['count_yesterday']
         diff = diff.sort_values(['change', 'count'], ascending=False).reset_index(drop=True)
         diff['summary'] = diff.apply(diff_format, axis=1)
