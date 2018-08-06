@@ -293,8 +293,11 @@ class DiffGenerator:
             return f"{int(r['count'])} {change}"
 
         # Convert datetimes to strings
-        for c in df.select_dtypes(include=[np.datetime64]):
-            df[c] = df[c].dt.strftime('%Y%m%dT%H:%M%SZ')
+        for c in df1.select_dtypes(include=[np.datetime64]):
+            df1[c] = df1[c].dt.strftime('%Y%m%dT%H:%M%SZ')
+
+        for c in df2.select_dtypes(include=[np.datetime64]):
+            df2[c] = df2[c].dt.strftime('%Y%m%dT%H:%M%SZ')
 
         diff = df2.merge(df1, how='outer', on=df1.columns[0],
                          suffixes=['_yesterday', '']).fillna(0)
