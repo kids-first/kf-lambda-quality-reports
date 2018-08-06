@@ -292,6 +292,10 @@ class DiffGenerator:
             change = f'(<span class="{color}">{change}</span>)'
             return f"{int(r['count'])} {change}"
 
+        # Convert datetimes to strings
+        for c in df.select_dtypes(include=[np.datetime64]):
+            df[c] = df[c].dt.strftime('%Y%m%dT%H:%M%SZ')
+
         diff = df2.merge(df1, how='outer', on=df1.columns[0],
                          suffixes=['_yesterday', '']).fillna(0)
         diff['change'] = diff['count'] - diff['count_yesterday']
