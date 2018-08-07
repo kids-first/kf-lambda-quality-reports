@@ -40,7 +40,7 @@ TABLES = [
     'genomic_file'
 ]
 IGNORE_COLS = ['uuid', 'created_at', 'modified_at', 'kf_id']
-DIFF_RE = re.compile(r'^.*\(([+-]?\d+)\)$')
+DIFF_RE = re.compile(r'^(.*\()([+-]?\d+(\.\d+)?)\)$')
 
 
 def handler(event, context):
@@ -257,7 +257,7 @@ class DiffGenerator:
                 sections[section][name] = sections[section][name]\
                         .drop(['count', 'change', 'summary', 'count_yesterday'],
                                              axis=1)\
-                        .rename(columns={'summary_html': 'change'})
+                        .rename(columns={'summary_html': 'count (change)'})
             # Diff for wide tables with strings
             else:
                 sections[section][name] = self.compute_diff(df1, df2)
@@ -266,8 +266,11 @@ class DiffGenerator:
             if sections[section][name].shape[0] == 0:
                 sections[section][name] = None
                 continue
-            # sections[section][name] = sections[section][name].style.applymap(self.highlight_diff).set_table_attributes('class="table table-striped table-hover"')
-            sections[section][name] = sections[section][name].style.set_table_attributes('class="table table-striped table-hover"')
+            if len(df1.columns) == 2 and df1.columns[1] == 'count':
+                sections[section][name] = sections[section][name].style.set_table_attributes('class="table table-striped table-hover"')
+            else:
+              sections[section][name] = sections[section][name].applymap(self.highlight_diff)
+              sections[section][name] = sections[section][name].style.set_table_attributes('class="table table-striped table-hover"')
 
         return sections
 
@@ -327,33 +330,31 @@ class DiffGenerator:
             else:
                 diff[c] = df.xs(c, level=1, drop_level=1, axis=1) \
                             .apply(self.differ, axis=1)
-
-        if 'count' in diff.columns:
-            diff = diff[~diff['count'].str.endswith('(+0)', na=True)]
-            diff = diff[list(set(diff.columns) - {'count'}) + ['count']]
             
         return diff
 
     def highlight_diff(self, value):
         if value is None:
-            return ''
+            return value
         
         try:
             m = DIFF_RE.match(str(value))
             if m:
-                value = int(str(m.groups(0)[0]))
+                change = float(str(m.group(2)))
             else:
-                return ''
+                return value
 
-            if value < 0:
-                return 'color: #dc3545;'
-            elif value > 0:
-                return 'color: #28a745;'
+            if change < 0:
+                r = DIFF_RE.sub(r"\1<span class='text-danger'>\2</span>)", value)
+                return r
+            elif change > 0:
+                r = DIFF_RE.sub(r"\1<span class='text-success'>\2</span>)", value)
+                return r
             else:
-                return ''
+                return value
         except ValueError as verr:
-            return ''
-        return ''
+            return value
+        return value
 
     def differ(self, r):
         """
@@ -362,8 +363,12 @@ class DiffGenerator:
         first = r['DF1']
         second = r['DF2']
         try:
-            first = int(str(first))
-            second = int(str(second))
+            try:
+                first = int(str(first))
+                second = int(str(second))
+            except ValueError:
+                first = float(str(first))
+                second = float(str(second))
         except ValueError as verr:
             if str(first) != str(second):
                 return f'<span class="text-success">{first}</span> <span class="text-danger">(-{second})</span>'
