@@ -40,7 +40,7 @@ TABLES = [
     'genomic_file'
 ]
 IGNORE_COLS = ['uuid', 'created_at', 'modified_at', 'kf_id']
-DIFF_RE = re.compile(r'^(.*\()([+-]?\d+)\)$')
+DIFF_RE = re.compile(r'^(.*\()([+-]?\d+(\.\d+)?)\)$')
 
 
 def handler(event, context):
@@ -363,8 +363,12 @@ class DiffGenerator:
         first = r['DF1']
         second = r['DF2']
         try:
-            first = int(str(first))
-            second = int(str(second))
+            try:
+                first = int(str(first))
+                second = int(str(second))
+            except ValueError:
+                first = float(str(first))
+                second = float(str(second))
         except ValueError as verr:
             if str(first) != str(second):
                 return f'<span class="text-success">{first}</span> <span class="text-danger">(-{second})</span>'
