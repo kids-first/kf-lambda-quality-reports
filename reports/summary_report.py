@@ -310,6 +310,7 @@ class DiffGenerator:
         diff['summary'] = diff.apply(diff_format, axis=1)
         diff['summary_html'] = diff.apply(diff_html, axis=1)
         diff = diff[diff['change'] != 0]
+        diff = diff.reset_index(drop=True)
         return diff
 
     def compute_diff(self, df1, df2):
