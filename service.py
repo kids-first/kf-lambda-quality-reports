@@ -33,6 +33,7 @@ def handler(event, context):
     print('calling', module)
 
     failed = False
+    at = []
     try:
         at, files = module.handler(event, context)
     except Exception as err:
@@ -56,7 +57,7 @@ def handler(event, context):
         })
 
         attachments.append({
-            "fallback": ":memo: Report summar",
+            "fallback": ":memo: Report summary",
             "fields": [
                 {
                     "title": ":open_file_folder: Files Available",
@@ -85,7 +86,10 @@ def handler(event, context):
     for name, path in files.items():
         upload_to_s3(path, output)
 
-    return
+    if not at:
+        return
+
+    attachments = at
 
     # Send slack notification
     if SLACK_TOKEN is not None:
@@ -100,6 +104,9 @@ def handler(event, context):
             resp = requests.post('https://slack.com/api/chat.postMessage',
                 headers={'Authorization': 'Bearer '+SLACK_TOKEN},
                 json=message)
+
+        # Don't upload files to slack
+        return
 
         # Upload files to slack
         for name, path in files.items():
