@@ -9,7 +9,6 @@ import boto3
 from botocore.vendored import requests
 from collections import defaultdict
 
-from xhtml2pdf import pisa
 from jinja2 import Environment, FileSystemLoader
 
 
@@ -52,15 +51,27 @@ def handler(event, context):
     conn_str = get_pg_connection_str()
 
     g = SummaryGenerator(output=f"/tmp/", s3output=output, conn_str=conn_str)
-    g.make_report()
+    diff_message = g.make_report()
 
     # Collect all files in /tmp
     files = set(glob.glob('/tmp/**/*.png', recursive=True))
     files = files.union(set(glob.glob('/tmp/**/*.csv', recursive=True)))
-    files = files.union(set(glob.glob('/tmp/**/*.pdf', recursive=True)))
     files = files.union(set(glob.glob('/tmp/**/*.html', recursive=True)))
 
-    return [], {p.replace('/tmp/', ''): p for p in list(files)}
+    if len(diff_message) > 0:
+        url = event['output']
+        url += f"/Table_Diff_Report_{datetime.now().strftime('%Y%m%d')}.html"
+        url = 'https://s3.amazonaws.com/' + url
+        diff_message[0]["actions"] = [
+            {
+                "type": "button",
+                "text": ":eyes: Check it Out :eyes:",
+                "url": url,
+                "style": "primary"
+            }
+        ]
+
+    return diff_message, {p.replace('/tmp/', ''): p for p in list(files)}
 
 
 class SummaryGenerator:
@@ -110,17 +121,9 @@ class SummaryGenerator:
         with open(self.output+filename, "w+") as f:
             f.write(html_out)
 
-        self.make_diff_report(table_summaries)
+        diff_message = self.make_diff_report(table_summaries)
 
-        # DO NOT save to pdf for now. We don't do any table size checking
-        return
-
-        # Render and save PDF
-        filename = f'Table_Summary_Report.pdf'
-        with open(self.output+filename, "w+b") as out_pdf_file_handle:
-            pisa.CreatePDF(
-                src=html_out,
-                dest=out_pdf_file_handle)
+        return diff_message
 
     def make_diff_report(self, table_summaries):
         """
@@ -156,11 +159,12 @@ class SummaryGenerator:
         diff = DiffGenerator(output=self.output+'diffs/',
                              summaries=table_summaries,
                              yesterday=self.output+'yesterday/')
-        diff.make_report()
+        message = diff.make_report()
 
         # Remove yesterday's data so it's not uploaded again
         import shutil
         shutil.rmtree(self.output+'yesterday')
+        return message
 
 def table_report(df):
     """
@@ -230,6 +234,39 @@ class DiffGenerator:
         with open(self.output+filename, "w+") as f:
             f.write(html_out)
 
+        # Create diff message
+        return self.diff_summary_message()
+
+    def diff_summary_message(self):
+        """
+        Compute number of changes by table then report number of tables
+        changed and number of values changed
+        """
+        counts = self.diff_counts
+        summaries = {f'{k1}_{k2}': v2 for k1, v1 in counts.items()
+                                     for k2, v2 in v1.items()}
+
+        total = int(sum(summaries.values()))
+        non_zero = [k for k, v in summaries.items() if v > 0]
+
+        if total <= 0:
+            return []
+        
+        expl = np.random.choice(['Wow', 'Wowza', 'Woa', 'Gee', 'Oh my', 'Hey',
+                                 'Take a look', 'Check it out', 'Gosh', 'Golly'])
+
+        message = (f"{expl}! There were *{total}* changes made across "
+                    +f"*{len(non_zero)}/{len(summaries)}* columns yesterday!")
+
+        attachments = [{
+            "text": message,
+            "fallback": message,
+            "color": "#3AA3E3",
+            "attachment_type": "default",
+        }]
+
+        return attachments
+
     def compute_diffs(self):
         """
         Looks through summary tables and computes diffs for each returning a
@@ -238,6 +275,8 @@ class DiffGenerator:
         """
 
         sections = defaultdict(dict)
+        # Also keep track of total number of changes per column
+        counts = defaultdict(dict)
         # Iterate through the summaries from the summary report and try to
         # diff against the same summary from yesterday, if it exists
         for f, df1 in self.summaries.items():
@@ -254,6 +293,7 @@ class DiffGenerator:
             if len(df1.columns) == 2 and df1.columns[1] == 'count':
                 sections[section][name] = self.count_diff(df1, df2)
                 sections[section][name].to_csv(f'{self.output}{section}_{name}_diff.csv')
+                counts[section][name] = sections[section][name]['change'].abs().sum()
                 sections[section][name] = sections[section][name]\
                         .drop(['count', 'change', 'summary', 'count_yesterday'],
                                              axis=1)\
@@ -272,6 +312,7 @@ class DiffGenerator:
               sections[section][name] = sections[section][name].applymap(self.highlight_diff)
               sections[section][name] = sections[section][name].style.set_table_attributes('class="table table-striped table-hover"')
 
+        self.diff_counts = counts
         return sections
 
     def count_diff(self, df1, df2):
