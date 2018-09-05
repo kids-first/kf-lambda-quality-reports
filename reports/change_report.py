@@ -1,8 +1,15 @@
 import boto3
 import os
 import re
+import glob
+from datetime import datetime
+
 import pandas as pd
+import numpy as np
+
 from collections import defaultdict
+
+from jinja2 import Environment, FileSystemLoader
 
 
 DIFF_RE = re.compile(r'^(.*\()([+-]?\d+(\.\d+)?)\)$')
@@ -69,13 +76,16 @@ def handler(event, context):
 
 class ChangeGenerator:
 
-    def __init__(self, path_1, path_2, output='/tmp/'):
+    def __init__(self, path_1, path_2, output='/tmp/',
+                 title='Change Report', subtitle=''):
         """
         :param path_1: Path to directory of first summary files
         :param path_2: Path to directory of second summary files
         :param output: The directory to output all diff tables
         """
         self.output = output
+        self.title = title
+        self.subtitle = subtitle
         if 's3://' in path_1:
             path_1 = self.download_summary(path_1, output+'summary_1/')
         if 's3://' in path_2:
@@ -84,6 +94,8 @@ class ChangeGenerator:
         if not os.path.isdir(path_1) or not os.path.isdir(path_2):
             raise IOError(f'Please provide valid directory paths')
 
+        self.path_1 = path_1
+        self.path_2 = path_2
         self.tables = self.compare_tables(path_1, path_2)
         self.columns = self.compare_columns(path_1, path_2)
 
@@ -108,31 +120,52 @@ class ChangeGenerator:
         return output
 
     def make_report(self):
-        diffs = self.compute_diffs()
+        diffs, counts = self.compute_diffs()
+
+        # Styling of the diff tables
+        for name, table in diffs.items():
+            for col, column in table.items():
+                diffs[name][col] = (diffs[name][col]
+                        .drop(['count_2', 'change', 'summary', 'count_1'],
+                              axis=1)
+                        .rename(columns={'summary_html': 'count (change)'}))
+                diffs[name][col] = (diffs[name][col]
+                        .style.set_table_attributes(
+                            'class="table table-striped table-hover"'))
 
         env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__))))
         template = env.get_template("summary_template.html")
 
+        formatted_counts = {}
+        for table, columns in counts.items():
+            formatted_counts[table] = pd.DataFrame.from_dict(columns,
+                                                             orient='index',
+                                                             columns=['change'])
+            formatted_counts[table].index.name = 'column'
+            formatted_counts[table] = formatted_counts[table].reset_index()
+
         template_vars = {
-            "title": "Daily Change Report",
+            "title": self.title,
+            "subtitle": self.subtitle,
             "date": datetime.now(),
-            "sections": diffs
+            "sections": diffs,
+            "counts": formatted_counts
         }
         # Render and save HTML
         html_out = template.render(template_vars)
-        filename = f"../Table_Diff_Report_{datetime.now().strftime('%Y%m%d')}.html"
-        with open(self.output+filename, "w+") as f:
+        title = self.title.lower().replace(' ', '_')
+        filename = f"{title}.html"
+        with open(os.path.join(self.output, filename), "w+") as f:
             f.write(html_out)
 
         # Create diff message
-        # return self.diff_summary_message()
+        return self.diff_summary_message(counts)
 
-    def diff_summary_message(self, path_1, path_2):
+    def diff_summary_message(self, counts):
         """
         Compute number of changes by table then report number of tables
         changed and number of values changed
         """
-        counts = self.diff_counts
         summaries = {f'{k1}_{k2}': v2 for k1, v1 in counts.items()
                                      for k2, v2 in v1.items()}
 
@@ -150,7 +183,7 @@ class ChangeGenerator:
 
         attachments = [{
             "text": message,
-            "fallback": message,
+            "fallback": message.replace('*', ''),
             "color": "#3AA3E3",
             "attachment_type": "default",
         }]
@@ -196,6 +229,13 @@ class ChangeGenerator:
 
         return columns
 
+    def shape_diff(self):
+        df = pd.DataFrame.from_dict(self.columns,
+                                    orient='index').drop('same', axis=1)
+        df = df[['added', 'deleted']].applymap(lambda x: ', '.join(x))
+        df = df.dropna(thresh=1, axis=0)
+        return df
+
     def compute_diffs(self):
         """
         Looks through summary tables and computes diffs for each returning a
@@ -203,43 +243,34 @@ class ChangeGenerator:
         out any summaries that did not change.
         """
 
-        sections = defaultdict(dict)
+        tables = defaultdict(dict)
         # Also keep track of total number of changes per column
         counts = defaultdict(dict)
-        # Iterate through the summaries from the summary report and try to
-        # diff against the same summary from yesterday, if it exists
-        for f, df1 in self.summaries.items():
-            section = f.split('_')[0]
-            name = f[f.find('_')+1:].replace('.csv', '')
 
-            df2_path = os.path.join(self.yesterday_path, f+'.csv')
-            # Don't try to diff if it's a summary that didn't exist yesterday
-            if not os.path.exists(df2_path):
-                continue
-            df2 = pd.read_csv(df2_path, index_col=0)
+        # Look through each table
+        for table, columns in self.columns.items():
+            out_dir = os.path.join(self.output, table)
+            os.makedirs(out_dir, exist_ok=True)
+            # Make diffs for each column that is shared between summaries
+            for column in columns['same']:
+                df_1 = pd.read_csv(os.path.join(self.path_1,
+                                                table,
+                                                column+'.csv'),
+                                   index_col=0)
+                df_2 = pd.read_csv(os.path.join(self.path_2,
+                                                table,
+                                                column+'.csv'),
+                                   index_col=0)
 
-            # Diff using k: v dictonary comparison
-            if len(df1.columns) == 2 and df1.columns[1] == 'count':
-                sections[section][name] = self.count_diff(df1, df2)
-                sections[section][name].to_csv(f'{self.output}{section}_{name}_diff.csv')
-                counts[section][name] = sections[section][name]['change'].abs().sum()
-                sections[section][name] = sections[section][name]\
-                        .drop(['count', 'change', 'summary', 'count_yesterday'],
-                                             axis=1)\
-                        .rename(columns={'summary_html': 'count (change)'})
-            # Diff for wide tables with strings
-            else:
-                sections[section][name] = self.compute_diff(df1, df2)
-                sections[section][name].to_csv(f'{self.output}{section}_{name}_diff.csv')
-            # Don't try to style an empty diff and just return None
-            if sections[section][name].shape[0] == 0:
-                sections[section][name] = None
-                continue
-            if len(df1.columns) == 2 and df1.columns[1] == 'count':
-                sections[section][name] = sections[section][name].style.set_table_attributes('class="table table-striped table-hover"')
-            else:
-              sections[section][name] = sections[section][name].applymap(self.highlight_diff)
-              sections[section][name] = sections[section][name].style.set_table_attributes('class="table table-striped table-hover"')
+                tables[table][column] = self.count_diff(df_1, df_2)
+                # Save diff
+                out_path = os.path.join(out_dir, f'{column}_diff.csv')
+                tables[table][column].to_csv(out_path)
+                # Update the counts
+                counts[table][column] = (tables[table][column]['change']
+                                            .abs()
+                                            .sum())
+        return tables, counts
 
         self.diff_counts = counts
         return sections
@@ -249,7 +280,7 @@ class ChangeGenerator:
         Compares two dataframes by converting to dicts
         """
         def diff_format(r):
-            return f"{int(r['count'])} ({int(r['change']):+})"
+            return f"{int(r['count_2'])} ({int(r['change']):+})"
 
         def diff_html(r):
             """
@@ -264,7 +295,7 @@ class ChangeGenerator:
             else:
                 color = 'text-color'
             change = f'(<span class="{color}">{change}</span>)'
-            return f"{int(r['count'])} {change}"
+            return f"{int(r['count_2'])} {change}"
 
         # Convert datetimes to strings
         for c in df1.select_dtypes(include=[np.datetime64]):
@@ -274,9 +305,9 @@ class ChangeGenerator:
             df2[c] = df2[c].dt.strftime('%Y-%m-%d %H:%M:%S')
 
         diff = df2.merge(df1, how='outer', on=df1.columns[0],
-                         suffixes=['_yesterday', '']).fillna(0)
-        diff['change'] = diff['count'] - diff['count_yesterday']
-        diff = diff.sort_values(['change', 'count'], ascending=False).reset_index(drop=True)
+                         suffixes=['_2', '_1']).fillna(0)
+        diff['change'] = diff['count_2'] - diff['count_1']
+        diff = diff.sort_values(['change', 'count_2'], ascending=False).reset_index(drop=True)
         diff['summary'] = diff.apply(diff_format, axis=1)
         diff['summary_html'] = diff.apply(diff_html, axis=1)
         diff = diff[diff['change'] != 0]

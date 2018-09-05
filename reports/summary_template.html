@@ -37,7 +37,10 @@
       <h1 data-toc-skip class="display-2">
         {{ title }}
       </h1>
-      <h1 data-toc-skip class="display-4 text-muted">{{ date.strftime('%b %d, %Y') }}</h1>
+      {% if subtitle %}
+      <h1 data-toc-skip class="display-4 text-muted">{{ subtitle }}</h1>
+      {% endif %}
+      <h4 data-toc-skip class="display-7 text-muted">{{ date.strftime('%b %d, %Y') }}</h4>
     </div>
   </div>
 
@@ -50,10 +53,28 @@
 
       <div id="content" class="col-sm-10 bg-white">
        
-        {% for name, summaries in sections.items() %}
+        {% for table_name, summaries in sections.items() %}
         <div class="row p-3">
           <div class="col text-left">
-            <h2 class="display-4"data-toc-text="{{name.title()}}">{{ name.replace('_', ' ').title() }}</h2>
+            <h2 class="display-4"data-toc-text="{{table_name.title()}}">{{ table_name.replace('_', ' ').title() }}</h2>
+          </div>
+        </div>
+
+        <div class="row m-1 mb-3">
+          <div class="col">
+            <div class="card">
+              <div class="card-body">
+                <h3 data-toc-text="Change Summary" class="card-title">Change Summary</h3>
+
+                <div class="row m-1">
+                  <div class="col">
+                    <div class="table-responive">
+                      {{ counts[table_name.lower()].to_html(classes=['table', 'table-striped', 'table-hover'], border=0).replace('dataframe ','').replace(' border="1"','') }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -62,7 +83,7 @@
           <div class="col">
             <div class="card">
               <div class="card-body">
-                <h3 data-toc-text="{{name.replace('_','-')}}" class="card-title">{{ name.replace('_', ' ').title() }}</h3>
+                <h3 data-toc-text="{{name.replace('_','-').title()}}" class="card-title">{{ name.replace('_', ' ').title() }}</h3>
 
                 <div class="row m-1">
                   <div class="col">
