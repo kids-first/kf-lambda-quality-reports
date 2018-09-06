@@ -3,8 +3,8 @@ import hvac
 import re
 import os
 import glob
+import json
 import pandas as pd
-import numpy as np
 import boto3
 from botocore.vendored import requests
 from collections import defaultdict
@@ -27,7 +27,7 @@ def get_pg_connection_str():
     """
     Helper function to load database creds from vault
     """
-    if 'CONN_STR' in os.enviorn:
+    if 'CONN_STR' in os.environ:
         return os.environ['CONN_STR']
     env = os.environ.get('ENV')
     vault_url = os.environ.get('VAULT_URL')
@@ -53,16 +53,55 @@ def handler(event, context):
     """
     study_id = event.get('study_id')
     output = event.get('output')
+    change_report = event.get('change_report', False)
     conn_str = get_pg_connection_str()
 
-    g = SummaryGenerator(output=f"/tmp/", s3output=output, conn_str=conn_str)
+    g = SummaryGenerator(output=f"/tmp/", conn_str=conn_str)
+    g.make_report()
 
     # Collect all files in /tmp for upload
     files = set(glob.glob('/tmp/**/*.png', recursive=True))
     files = files.union(set(glob.glob('/tmp/**/*.csv', recursive=True)))
     files = files.union(set(glob.glob('/tmp/**/*.html', recursive=True)))
 
+
+    if change_report:
+        call_daily_change_report(context.function_name, output)
+
     return [], {p.replace('/tmp/', ''): p for p in list(files)}
+
+
+def call_daily_change_report(function, output):
+    # Call the ChangeReport lambda
+    bucket = output.replace('s3://', '').split('/')[0]
+    # Will upload change report back to the same directory as this report
+    prefix = 's3://' + '/'.join(output.replace('s3://', '').split('/')[1:])
+
+    date = datetime.strptime(prefix.split('/')[-2].replace('-reports', ''),
+                             '%Y%m%d')
+    yesterday = date - timedelta(days=1)
+    yesterday_path = output.replace(date.strftime('%Y%m%d'),
+                                    yesterday.strftime('%Y%m%d'))
+
+    payload = {
+        "name": "Change Report",
+        "module": "reports.change_report",
+        "summary_path_1": yesterday_path+'/summaries',
+        "summary_path_2": output+'/summaries',
+        "output": output,
+        "title": "Daily Change Report",
+        "subtitle": f"{yesterday.strftime('%Y%m%d')} to " +
+                    f"{date.strftime('%Y%m%d')}",
+    }
+
+    print('Invoke change report:', json.dumps(payload))
+
+    client = boto3.client('lambda')
+    client.invoke(
+        FunctionName=function,
+        InvocationType='Event',
+        Payload=str.encode(json.dumps(payload))
+    )
 
 
 class SummaryGenerator:
@@ -82,7 +121,7 @@ class SummaryGenerator:
         if self.study_id is not None:
             self.output += self.study_id+'/'
 
-        os.makedirs(self.output+'tables', exist_ok=True)
+        os.makedirs(os.path.join(self.output, 'summaries'), exist_ok=True)
 
     def make_report(self):
         """
@@ -94,13 +133,18 @@ class SummaryGenerator:
             df = pd.read_sql_table(table, con=self.conn_str)
             table_summaries[table] = table_report(df)
 
-        # Flatten each tables report into one dict
-        summaries = {f'{k1}_{k2}': v2 for k1, v1 in table_summaries.items()
-                                     for k2, v2 in v1.items()}
-
         # Save each summary file to csv
-        for name, summary in summaries.items():
-            summary.to_csv(f'{self.output}tables/{name}.csv')
+        for table_name, table in table_summaries.items():
+            os.makedirs(os.path.join(self.output,
+                                     'summaries',
+                                     table_name),
+                        exist_ok=True)
+            for col_name, column in table.items():
+                path = os.path.join(self.output,
+                                    'summaries',
+                                    table_name,
+                                    f'{col_name}.csv')
+                column.to_csv(path)
 
         # Print report to html
         env = Environment(loader=FileSystemLoader(os.path.dirname(os.path.abspath(__file__))))
@@ -109,6 +153,7 @@ class SummaryGenerator:
         template_vars = {
             "title": "Data Summary Report",
             "date": datetime.now(),
+            "counts": None,
             "sections": table_summaries
         }
 
@@ -118,7 +163,6 @@ class SummaryGenerator:
         with open(self.output+filename, "w+") as f:
             f.write(html_out)
 
-        # TODO Call diff report lambda
 
 def table_report(df):
     """
@@ -133,7 +177,7 @@ def table_report(df):
     reports['summary'] = df.describe(include='all', percentiles=[])
 
     for name, col in reports['summary'].items():
-        if not name.endswith('_id') and col['unique']/col['count'] < 0.1:
+        if not name.endswith('_id'):
             reports[name] = column_report(df, name)
 
     return reports

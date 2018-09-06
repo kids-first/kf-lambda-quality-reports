@@ -11,6 +11,7 @@ from reports import change_report
 
 @pytest.fixture
 def objects():
+    @mock_s3
     def f():
         client = boto3.client('s3')
         client.create_bucket(Bucket='tests')
@@ -39,21 +40,6 @@ def test_invalid_dir():
     assert 'provide valid' in str(err.value)
 
 
-@mock_s3
-def test_invalid_path(objects):
-    """ Test that invalid s3 paths fail """
-    objects()
-    client = boto3.client('s3')
-    event = { 
-        'summary_path_1': 's3://tests/summary_1/',
-        'summary_path_2': 's3://tests/summary_2/',
-        'output': 'tests/data/output/',
-        'title': 'Biospecimen Change Report',
-    }
-
-    res = change_report.handler(event, {})
-
-
 def test_compare_tables():
     """ Test that two summaries' tables are compared correctly """
     path_1 = 'tests/data/change_report/summary_1/'
@@ -67,6 +53,7 @@ def test_compare_tables():
     }
 
 
+@mock_s3
 def test_compare_columns():
     """ Test that two summaries' columns are compared correctly """
     path_1 = 'tests/data/change_report/summary_1/'
@@ -92,6 +79,7 @@ def test_compare_columns():
     }
 
 
+@mock_s3
 def test_compute_diffs(tmpdir):
     """ Test that column diffs are calculated correctly """
     path_1 = 'tests/data/change_report/summary_1/'
@@ -100,7 +88,7 @@ def test_compute_diffs(tmpdir):
 
     g = change_report.ChangeGenerator(path_1, path_2, output=p)
     tables, counts = g.compute_diffs()
-    assert os.path.isfile(p+'/biospecimens/composition_diff.csv')
+    assert os.path.isfile(p+'/diffs/biospecimens/composition_diff.csv')
     assert not os.path.isfile(p+'/biospecimens/analyte_type_diff.csv')
     assert list(tables.keys()) == ['biospecimens']
     assert list(tables['biospecimens'].keys()) == ['composition']

@@ -60,6 +60,7 @@
           </div>
         </div>
 
+        {% if counts %}
         <div class="row m-1 mb-3">
           <div class="col">
             <div class="card">
@@ -77,6 +78,7 @@
             </div>
           </div>
         </div>
+        {% endif %}
 
         {% for name, summary in summaries.items() %}
         <div class="row m-1 mb-3">

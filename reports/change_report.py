@@ -48,19 +48,22 @@ def handler(event, context):
     """
     path_1 = event.get('summary_path_1')
     path_2 = event.get('summary_path_2')
-    output = event.get('output', '/tmp/')
+    output = event.get('output', './output/')
+    local_output = event.get('local_output', '/tmp/')
+    title = event.get('title', '')
+    subtitle = event.get('subtitle', 'Change Report')
 
-    g = ChangeGenerator(path_1, path_2, output=output)
+    g = ChangeGenerator(path_1, path_2, title=title, subtitle=subtitle)
     diff_message = g.make_report()
+    print(diff_message)
 
     # Collect all files in ouput
-    files = set(glob.glob(output+'**/*.png', recursive=True))
-    files = files.union(set(glob.glob(output+'**/*.csv', recursive=True)))
-    files = files.union(set(glob.glob(output+'**/*.html', recursive=True)))
+    files = set(glob.glob(local_output+'diffs/**/*.csv', recursive=True))
+    files = files.union(set(glob.glob(local_output+'**/*.html', recursive=True)))
 
     if len(diff_message) > 0:
-        url = event['output']
-        url += f"/Table_Diff_Report_{datetime.now().strftime('%Y%m%d')}.html"
+        url = output
+        url += f"/{title.lower().replace(' ', '_')}.html"
         url = 'https://s3.amazonaws.com/' + url
         diff_message[0]["actions"] = [
             {
@@ -71,7 +74,12 @@ def handler(event, context):
             }
         ]
 
-    return diff_message, {p.replace(output, ''): p for p in list(files)}
+    print(files)
+    print(output)
+    print(os.listdir('/tmp'))
+    print(os.listdir('/tmp/diffs'))
+
+    return diff_message, {p.replace('/tmp/', ''): p for p in list(files)}
 
 
 class ChangeGenerator:
@@ -87,9 +95,9 @@ class ChangeGenerator:
         self.title = title
         self.subtitle = subtitle
         if 's3://' in path_1:
-            path_1 = self.download_summary(path_1, output+'summary_1/')
+            path_1 = self.download_summary(path_1, output=output+'summary_1/')
         if 's3://' in path_2:
-            path_2 = self.download_summary(path_2, output+'summary_2/')
+            path_2 = self.download_summary(path_2, output=output+'summary_2/')
 
         if not os.path.isdir(path_1) or not os.path.isdir(path_2):
             raise IOError(f'Please provide valid directory paths')
@@ -113,10 +121,12 @@ class ChangeGenerator:
 
         for page in paginator:
             for obj in page['Contents']:
-                fname = obj['Key'].split('/')[-1]
+                fname = '/'.join(obj['Key'].split('/')[-2:])
+                d = os.path.join(output, '/'.join(fname.split('/')[:-1]))
+                os.makedirs(d, exist_ok=True)
                 client.download_file(bucket,
                                      obj['Key'],
-                                     os.path.join(self.output, fname))
+                                     os.path.join(output, fname))
         return output
 
     def make_report(self):
@@ -124,6 +134,8 @@ class ChangeGenerator:
 
         # Styling of the diff tables
         for name, table in diffs.items():
+            if name == 'summary':
+                continue
             for col, column in table.items():
                 diffs[name][col] = (diffs[name][col]
                         .drop(['count_2', 'change', 'summary', 'count_1'],
@@ -249,10 +261,12 @@ class ChangeGenerator:
 
         # Look through each table
         for table, columns in self.columns.items():
-            out_dir = os.path.join(self.output, table)
+            out_dir = os.path.join(self.output, 'diffs', table)
             os.makedirs(out_dir, exist_ok=True)
             # Make diffs for each column that is shared between summaries
             for column in columns['same']:
+                if column == 'summary':
+                    continue
                 df_1 = pd.read_csv(os.path.join(self.path_1,
                                                 table,
                                                 column+'.csv'),
@@ -261,6 +275,8 @@ class ChangeGenerator:
                                                 table,
                                                 column+'.csv'),
                                    index_col=0)
+                if len(df_1) == 0 or len(df_2) == 0:
+                    continue
 
                 tables[table][column] = self.count_diff(df_1, df_2)
                 # Save diff
@@ -307,11 +323,11 @@ class ChangeGenerator:
         diff = df2.merge(df1, how='outer', on=df1.columns[0],
                          suffixes=['_2', '_1']).fillna(0)
         diff['change'] = diff['count_2'] - diff['count_1']
-        diff = diff.sort_values(['change', 'count_2'], ascending=False).reset_index(drop=True)
         diff['summary'] = diff.apply(diff_format, axis=1)
         diff['summary_html'] = diff.apply(diff_html, axis=1)
         diff = diff[diff['change'] != 0]
-        diff = diff.reset_index(drop=True)
+        diff = diff.sort_values(['change', 'count_2'], ascending=False).reset_index(drop=True)
+        #diff = diff.reset_index(drop=True)
         return diff
 
     def compute_diff(self, df1, df2):
