@@ -14,7 +14,8 @@
     },
     {
       "name": "Table Summary",
-      "module": "reports.summary_report"
+      "module": "reports.summary_report",
+      "change_report": true
     },
     {
       "name": "Consent Codes",
