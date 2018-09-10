@@ -101,8 +101,8 @@ def call_daily_change_report(function, output):
     payload = {
         "name": "Change Report",
         "module": "reports.change_report",
-        "summary_path_1": yesterday_path+'/summaries',
-        "summary_path_2": output+'/summaries',
+        "summary_path_1": 's3://'+yesterday_path+'/summaries',
+        "summary_path_2": 's3://'+output+'/summaries',
         "output": output,
         "title": "Daily Change Report",
         "subtitle": f"{yesterday.strftime('%Y%m%d')} to " +
