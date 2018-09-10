@@ -74,10 +74,6 @@ def handler(event, context):
             }
         ]
 
-    print(files)
-    print(output)
-    print(os.listdir('/tmp'))
-    print(os.listdir('/tmp/diffs'))
 
     return diff_message, {p.replace('/tmp/', ''): p for p in list(files)}
 
@@ -131,6 +127,7 @@ class ChangeGenerator:
 
     def make_report(self):
         diffs, counts = self.compute_diffs()
+        print(counts)
 
         # Styling of the diff tables
         for name, table in diffs.items():
@@ -178,6 +175,7 @@ class ChangeGenerator:
         Compute number of changes by table then report number of tables
         changed and number of values changed
         """
+        print(counts)
         summaries = {f'{k1}_{k2}': v2 for k1, v1 in counts.items()
                                      for k2, v2 in v1.items()}
 
