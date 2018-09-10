@@ -74,11 +74,6 @@ def handler(event, context):
             }
         ]
 
-    print(files)
-    print(output)
-    print(os.listdir('/tmp'))
-    print(os.listdir('/tmp/diffs'))
-
     return diff_message, {p.replace('/tmp/', ''): p for p in list(files)}
 
 
