@@ -13,11 +13,26 @@ from jinja2 import Environment, FileSystemLoader
 
 TABLES = [
     'study',
+    'investigator',
     'participant',
-    'biospecimen',
-    'phenotype',
+    'alias_group',
+    'family_relationship',
+    'family',
+    'biospecimen_diagnosis',
     'diagnosis',
-    'genomic_file'
+    'outcome',
+    'phenotype',
+    'study_file',
+    'biospecimen',
+    'biospecimen_genomic_file',
+    'genomic_file',
+    'read_group_genomic_file',
+    'read_group',
+    'sequencing_center',
+    'sequencing_experiment',
+    'cavatica_task_genomic_file',
+    'cavatica_app',
+    'cavatica_task',
 ]
 
 IGNORE_COLS = ['uuid', 'created_at', 'modified_at', 'kf_id']
