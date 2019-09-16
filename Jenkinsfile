@@ -2,4 +2,5 @@
 lambda_jenkinsfile {
     projectName = "kf-lambda-quality-reports"
     prefixName = "kf-lambda-quality-reports"
+    agentLabel = "terraform-testing"
 }
